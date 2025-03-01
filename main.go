@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -10,14 +11,82 @@ import (
 	"github.com/sashabaranov/go-openai"
 )
 
+// Config 구조체 정의
+type Config struct {
+	APIKey string `json:"api_key"`
+}
+
+// loadConfig 함수는 config.json 파일에서 설정을 읽어옵니다
+func loadConfig() (*Config, error) {
+	// config.json 파일 읽기
+	data, err := os.ReadFile("config.json")
+	if err != nil {
+		return nil, err
+	}
+
+	// JSON 파싱
+	var config Config
+	err = json.Unmarshal(data, &config)
+	if err != nil {
+		return nil, err
+	}
+
+	return &config, nil
+}
+
+// saveConfig 함수는 설정을 config.json 파일에 저장합니다
+func saveConfig(config *Config) error {
+	data, err := json.MarshalIndent(config, "", "    ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile("config.json", data, 0644)
+}
+
 func main() {
-	// API 키를 환경 변수에서 가져오거나 직접 입력 받습니다.
-	apiKey := os.Getenv("OPENAI_API_KEY")
-	if apiKey == "" {
-		fmt.Print("OpenAI API 키를 입력하세요: ")
-		scanner := bufio.NewScanner(os.Stdin)
-		scanner.Scan()
-		apiKey = scanner.Text()
+	// API 키를 가져오는 순서:
+	// 1. config.json 파일에서 읽기 시도
+	// 2. 환경 변수에서 읽기 시도
+	// 3. 사용자에게 직접 입력 요청
+
+	var apiKey string
+
+	// 1. config.json 파일에서 읽기
+	config, err := loadConfig()
+	if err == nil && config.APIKey != "" && config.APIKey != "여기에_OpenAI_API_키를_입력하세요" {
+		apiKey = config.APIKey
+		fmt.Println("config.json 파일에서 API 키를 불러왔습니다.")
+	} else {
+		// 2. 환경 변수에서 읽기
+		apiKey = os.Getenv("OPENAI_API_KEY")
+		if apiKey == "" {
+			// 3. 사용자에게 직접 입력 요청
+			fmt.Print("OpenAI API 키를 입력하세요: ")
+			scanner := bufio.NewScanner(os.Stdin)
+			scanner.Scan()
+			apiKey = scanner.Text()
+
+			// 입력받은 API 키를 config 파일에 저장할지 물어봄
+			if apiKey != "" {
+				fmt.Print("입력한 API 키를 config.json 파일에 저장할까요? (y/n): ")
+				scanner.Scan()
+				saveChoice := scanner.Text()
+
+				if strings.ToLower(saveChoice) == "y" || strings.ToLower(saveChoice) == "yes" {
+					if config == nil {
+						config = &Config{}
+					}
+					config.APIKey = apiKey
+					err = saveConfig(config)
+					if err != nil {
+						fmt.Printf("config.json 파일 저장 중 오류 발생: %v\n", err)
+					} else {
+						fmt.Println("API 키가 config.json 파일에 저장되었습니다.")
+					}
+				}
+			}
+		}
 	}
 
 	client := openai.NewClient(apiKey)
@@ -92,9 +161,9 @@ func getOXAnswer(client *openai.Client, question string) (string, error) {
 			answer = "X"
 		} else {
 			// 그 외의 경우 답변을 분석하여 긍정이면 O, 부정이면 X로 설정
-			if strings.Contains(strings.ToLower(answer), "yes") || 
-			   strings.Contains(strings.ToLower(answer), "true") || 
-			   strings.Contains(strings.ToLower(answer), "맞") {
+			if strings.Contains(strings.ToLower(answer), "yes") ||
+				strings.Contains(strings.ToLower(answer), "true") ||
+				strings.Contains(strings.ToLower(answer), "맞") {
 				answer = "O"
 			} else {
 				answer = "X"
@@ -103,4 +172,4 @@ func getOXAnswer(client *openai.Client, question string) (string, error) {
 	}
 
 	return answer, nil
-} 
+}

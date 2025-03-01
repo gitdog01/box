@@ -23,3 +23,22 @@ go.work.sum
 
 # env file
 .env
+
+# API 키가 포함된 설정 파일
+config.json
+
+# 특정 빌드 파일
+ox-quiz
+ox-quiz.exe
+
+# IDE 관련 파일
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# macOS 관련 파일
+.DS_Store
+
+# 로그 파일
+*.log
